@@ -1,28 +1,7 @@
 using UnityEngine;
 
-public class RagdollInput : MonoBehaviour
+public class RagdollInput : RagdollController
 {
-    public RagdollManager ragdollManager;
-    public Transform hips;
-    public CharacterSettings settings;
-    
-    public Transform leftFist;
-    public Transform rightFist;
-    
-    private float lastAttackTime;
-    private Rigidbody hipsRb;
-    
-    void Start()
-    {
-        if (ragdollManager == null)
-            ragdollManager = GetComponent<RagdollManager>();
-            
-        hipsRb = hips.GetComponent<Rigidbody>();
-        
-        // Activate ragdoll physics initially
-        ragdollManager.isActive = true;
-    }
-    
     void Update()
     {
         if (!ragdollManager.isActive)
@@ -32,15 +11,11 @@ public class RagdollInput : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.J) && Time.time > lastAttackTime + settings.attackCooldown)
         {
             LeftPunch();
-            lastAttackTime = Time.time;
         }
         else if (Input.GetKeyDown(KeyCode.K) && Time.time > lastAttackTime + settings.attackCooldown)
         {
             RightPunch();
-            lastAttackTime = Time.time;
         }
-        // Kicks disabled due to IK system issues
-        // Kick inputs (N, M) no longer respond
     }
     
     void FixedUpdate()
@@ -55,37 +30,13 @@ public class RagdollInput : MonoBehaviour
         // Apply movement forces
         if (vertical != 0)
         {
-            hipsRb.AddForce(hips.forward * vertical * settings.moveForce);
+            ApplyMovement(hips.forward, vertical * settings.moveForce);
         }
         
         // Apply turning torque
         if (horizontal != 0)
         {
-            hipsRb.AddTorque(Vector3.up * horizontal * settings.turnTorque);
-        }
-        
-        // Jump
-        if (Input.GetButton("Jump"))
-        {
-            hipsRb.AddForce(Vector3.up * settings.jumpForce);
+            ApplyTurn(horizontal);
         }
     }
-    
-    void LeftPunch()
-    {
-        if (leftFist != null && leftFist.GetComponent<Rigidbody>() != null)
-        {
-            leftFist.GetComponent<Rigidbody>().AddForce(hips.forward * settings.punchForce, ForceMode.Impulse);
-        }
-    }
-    
-    void RightPunch()
-    {
-        if (rightFist != null && rightFist.GetComponent<Rigidbody>() != null)
-        {
-            rightFist.GetComponent<Rigidbody>().AddForce(hips.forward * settings.punchForce, ForceMode.Impulse);
-        }
-    }
-    
-    // Kick attacks removed as they don't work well with IK system
 }

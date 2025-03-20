@@ -1,198 +1,252 @@
 using System.Collections;
 using UnityEngine;
 using DitzelGames.FastIK;
-using Unity.VisualScripting;
+
 public class LegControll : MonoBehaviour
 {
-    public Transform Lray; // Raycast origin for left foot
-    public Transform Rray; // Raycast origin for right foot
-    public Transform Hips; // Character's hips
-    public Transform leftTarget; // IK target for the left leg
-    public Transform rightTarget; // IK target for the right leg
-    public FastIKFabric leftIK; // Left leg IK component
-    public FastIKFabric rightIK; // Right leg IK component
-
-    public float LegStepUp = 0.3f; // How high the leg lifts when stepping
-    public float wantStepAt = 0.3f; // Distance threshold to trigger a step
-    public float legSpeed = 5f; // Lerp speed for foot movement
-    public float predictiveStepFactor = 0.1f; // How much the feet should predict the body's movement
-
+    [Header("References")]
+    public Transform leftRayOrigin;    // Left foot ray origin
+    public Transform rightRayOrigin;   // Right foot ray origin
+    public Transform hips;             // Character's hips
+    public Transform leftFootTarget;   // IK target for left foot
+    public Transform rightFootTarget;  // IK target for right foot
+    public FastIKFabric leftIK;        // Left IK component
+    public FastIKFabric rightIK;       // Right IK component
+    
+    [Header("Step Settings")]
+    public float stepHeight = 0.3f;    // How high foot lifts when stepping
+    public float stepThreshold = 0.3f; // When to trigger a step
+    public float stepSpeed = 5f;       // How fast feet move
+    public float predictiveFactor = 0.1f; // Look-ahead for steps
+    
+    [Header("Status")]
     public bool isLegControllActive = false;
+    
+    // Private variables with clearer names
+    private Vector3 leftFootPos;       // Current left foot position
+    private Vector3 rightFootPos;      // Current right foot position
+    private Vector3 leftFootTarget2D;  // Ideal left foot position
+    private Vector3 rightFootTarget2D; // Ideal right foot position
+    private float leftDistance;        // Distance for left foot
+    private float rightDistance;       // Distance for right foot
+    private bool isLeftStepping = false;
+    private bool isRightStepping = false;
+    private string lastStep = "right"; // Last foot that stepped
+    private bool isInitialized = false;
+    private float stepTime = 0f;
+    
+    // Ground detection
+    private readonly int groundLayer = 1; // Default ground layer
 
-    private Vector3 ShouldBeL; // Target position for left foot
-    private Vector3 ShouldBeR; // Target position for right foot
-    private Vector3 ShouldReallyBeL; // Ideal position for left foot based on raycast
-    private Vector3 ShouldReallyBeR; // Ideal position for right foot based on raycast
-    private float DistL; // Distance for left foot
-    private float DistR; // Distance for right foot
-    private bool LStepping = false; // Left leg is stepping
-    private bool RStepping = false; // Right leg is stepping
-    private string LastStep = "R"; // Last foot that stepped
-    private bool firstTime = true;
-    float timer = 0f;
+        void OnEnable()
+    {
+        GetComponent<RagdollManager>().OnFall += () => isLegControllActive = false;
+    }
+
+    void OnDisable()
+    {
+        GetComponent<RagdollManager>().OnFall -= () => isLegControllActive = false;
+   }
 
     void Start()
     {
-        ShouldBeL = leftTarget.position;
-        ShouldBeR = rightTarget.position;
+        leftFootPos = leftFootTarget.position;
+        rightFootPos = rightFootTarget.position;
     }
-
+    
     void Update()
     {
         if (!isLegControllActive)
         {
-            firstTime = true;
-
-            leftIK.enabled = false;
-            rightIK.enabled = false;
-
-            enabled = false;
+            if (isInitialized)
+            {
+                // Disable IK when not active
+                leftIK.enabled = false;
+                rightIK.enabled = false;
+                isInitialized = false;
+            }
             return;
         }
-        else
+        
+        // Initialize positions if needed
+        if (!isInitialized)
         {
-            if (firstTime)
-            {
-                // Initialize foot positions
-                RaycastHit hitLFirst;
-                if (Physics.Raycast(Lray.position, Vector3.down, out hitLFirst, Mathf.Infinity, 1))
-                {
-                    leftTarget.position = hitLFirst.point;
-                }
-
-                RaycastHit hitRFirst;
-                if (Physics.Raycast(Rray.position, Vector3.down, out hitRFirst, Mathf.Infinity, 1))
-                {
-                    rightTarget.position = hitRFirst.point;
-                }
-
-                ShouldBeL = leftTarget.position;
-                ShouldBeR = rightTarget.position;
-                firstTime = false;
-            }
-
+            InitializeFootPositions();
             leftIK.enabled = true;
             rightIK.enabled = true;
+            isInitialized = true;
         }
-
-        // Cast rays to find where feet should be
-        RaycastHit hitL;
-        if (Physics.Raycast(Lray.position, Vector3.down, out hitL, Mathf.Infinity, 1))
-        {
-            // Add predictive offset based on movement direction
-            Vector3 directionOffset = Vector3.ClampMagnitude(Hips.GetComponent<Rigidbody>().linearVelocity, 1f) * predictiveStepFactor;
-            // Only apply significant offsets for horizontal movement
-            directionOffset.y = 0;
-
-            // Calculate the base target position
-            Vector3 baseTarget = 0.4f * (hitL.point - leftTarget.position) + hitL.point;
-            baseTarget.y = hitL.point.y;
-            // Apply direction offset for predictive stepping
-            ShouldReallyBeL = baseTarget + directionOffset;
-
-            // Apply terrain adaptation - align foot with surface normal
-            Vector3 surfaceNormal = hitL.normal;
-            Quaternion surfaceRotation = Quaternion.FromToRotation(Vector3.up, surfaceNormal);
-            leftTarget.rotation = Quaternion.Slerp(leftTarget.rotation,
-                                                  surfaceRotation * Quaternion.Euler(0, Hips.eulerAngles.y, 0),
-                                                  Time.deltaTime * 5f);
-        }
-
-        RaycastHit hitR;
-        if (Physics.Raycast(Rray.position, Vector3.down, out hitR, Mathf.Infinity, 1))
-        {
-            // Add predictive offset based on movement direction
-            Vector3 directionOffset = Vector3.ClampMagnitude(Hips.GetComponent<Rigidbody>().linearVelocity, 1f) * predictiveStepFactor;
-
-            // Only apply significant offsets for horizontal movement
-            directionOffset.y = 0;
-
-            // Calculate the base target position
-            Vector3 baseTarget = 0.4f * (hitR.point - rightTarget.position) + hitR.point;
-            baseTarget.y = hitR.point.y;
-            // Apply direction offset for predictive stepping
-            ShouldReallyBeR = baseTarget + directionOffset;
-
-            // Apply terrain adaptation - align foot with surface normal
-            Vector3 surfaceNormal = hitR.normal;
-            Quaternion surfaceRotation = Quaternion.FromToRotation(Vector3.up, surfaceNormal);
-            rightTarget.rotation = Quaternion.Slerp(rightTarget.rotation,
-                                                  surfaceRotation * Quaternion.Euler(0, Hips.eulerAngles.y, 0),
-                                                  Time.deltaTime * 5f);
-        }
-
-        // Calculate distances for each foot
-        DistL = Vector3.Distance(ShouldBeL, ShouldReallyBeL);
-        DistR = Vector3.Distance(ShouldBeR, ShouldReallyBeR);
-
-        // Decide which foot should step next
-        if (!LStepping && !RStepping)
-        {
-            if (LastStep == "R" && DistL > wantStepAt)
-            {
-                StartCoroutine(stepL());
-                LastStep = "L";
-            }
-            else if (LastStep == "L" && DistR > wantStepAt)
-            {
-                StartCoroutine(stepR());
-                LastStep = "R";
-            }
-        }
-
-        // Smoothly move feet to their targets
-        leftTarget.position = Vector3.Lerp(leftTarget.position, ShouldBeL, Time.deltaTime * 15f);
-        rightTarget.position = Vector3.Lerp(rightTarget.position, ShouldBeR, Time.deltaTime * 15f);
+        
+        // Update foot positioning
+        UpdateFootRaycasts();
+        CheckForSteps();
+        UpdateFootPositions();
     }
-
+    
+    // Initialize foot positions with raycasts
+    private void InitializeFootPositions()
+    {
+        RaycastHit hit;
+        
+        // Set left foot initial position
+        if (Physics.Raycast(leftRayOrigin.position, Vector3.down, out hit, Mathf.Infinity, groundLayer))
+        {
+            leftFootTarget.position = hit.point;
+            leftFootPos = hit.point;
+        }
+        
+        // Set right foot initial position
+        if (Physics.Raycast(rightRayOrigin.position, Vector3.down, out hit, Mathf.Infinity, groundLayer))
+        {
+            rightFootTarget.position = hit.point;
+            rightFootPos = hit.point;
+        }
+    }
+    
+    // Update foot target positions with raycasts
+    private void UpdateFootRaycasts()
+    {
+        RaycastHit hit;
+        Rigidbody hipsRb = hips.GetComponent<Rigidbody>();
+        
+        // Calculate predictive offset
+        Vector3 velocityOffset = Vector3.zero;
+        if (hipsRb != null)
+        {
+            velocityOffset = hipsRb.linearVelocity * predictiveFactor;
+            velocityOffset.y = 0; // Keep offset horizontal
+        }
+        
+        // Update left foot target
+        if (Physics.Raycast(leftRayOrigin.position, Vector3.down, out hit, Mathf.Infinity, groundLayer))
+        {
+            // Calculate target position with prediction
+            Vector3 baseTarget = hit.point;
+            leftFootTarget2D = baseTarget + velocityOffset;
+            
+            // Update foot orientation to match surface
+            if (!isLeftStepping)
+            {
+                Quaternion surfaceRotation = Quaternion.FromToRotation(Vector3.up, hit.normal);
+                leftFootTarget.rotation = Quaternion.Slerp(leftFootTarget.rotation,
+                                                          surfaceRotation * Quaternion.Euler(0, hips.eulerAngles.y, 0),
+                                                          Time.deltaTime * 5f);
+            }
+        }
+        
+        // Update right foot target
+        if (Physics.Raycast(rightRayOrigin.position, Vector3.down, out hit, Mathf.Infinity, groundLayer))
+        {
+            // Calculate target position with prediction
+            Vector3 baseTarget = hit.point;
+            rightFootTarget2D = baseTarget + velocityOffset;
+            
+            // Update foot orientation to match surface
+            if (!isRightStepping)
+            {
+                Quaternion surfaceRotation = Quaternion.FromToRotation(Vector3.up, hit.normal);
+                rightFootTarget.rotation = Quaternion.Slerp(rightFootTarget.rotation,
+                                                           surfaceRotation * Quaternion.Euler(0, hips.eulerAngles.y, 0),
+                                                           Time.deltaTime * 5f);
+            }
+        }
+        
+        // Calculate distances
+        leftDistance = Vector3.Distance(leftFootPos, leftFootTarget2D);
+        rightDistance = Vector3.Distance(rightFootPos, rightFootTarget2D);
+    }
+    
+    // Check if we need to take steps
+    private void CheckForSteps()
+    {
+        // Only start a step if we're not already stepping
+        if (!isLeftStepping && !isRightStepping)
+        {
+            if (lastStep == "right" && leftDistance > stepThreshold)
+            {
+                StartCoroutine(StepLeft());
+                lastStep = "left";
+            }
+            else if (lastStep == "left" && rightDistance > stepThreshold)
+            {
+                StartCoroutine(StepRight());
+                lastStep = "right";
+            }
+        }
+    }
+    
+    // Update foot positions
+    private void UpdateFootPositions()
+    {
+        leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, leftFootPos, Time.deltaTime * 15f);
+        rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, rightFootPos, Time.deltaTime * 15f);
+    }
+    
     // Left foot stepping coroutine
-    IEnumerator stepL()
+    private IEnumerator StepLeft()
     {
-        LStepping = true;
-        float extraSpeeder = Mathf.Clamp(Vector3.Distance(ShouldBeL, ShouldReallyBeL) / 0.3f, 1f, 1.5f);
-        Vector3 currentShouldReallyBeL = this.ShouldReallyBeL;
-        while (timer < 1f)
+        isLeftStepping = true;
+        
+        // Calculate step speed based on distance
+        float speedMultiplier = Mathf.Clamp(leftDistance / stepThreshold, 1f, 1.5f);
+        
+        // Store positions
+        Vector3 startPos = leftFootPos;
+        Vector3 targetPos = leftFootTarget2D;
+        
+        // Step animation
+        stepTime = 0f;
+        while (stepTime < 1f)
         {
-            timer += Time.deltaTime * legSpeed * extraSpeeder;
-
-            ShouldBeL = CalculatePositionLeft(currentShouldReallyBeL);
-
+            stepTime += Time.deltaTime * stepSpeed * speedMultiplier;
+            
+            // Calculate position with arc
+            float x = Mathf.Lerp(startPos.x, targetPos.x, stepTime);
+            float z = Mathf.Lerp(startPos.z, targetPos.z, stepTime);
+            float y = Mathf.Sin(stepTime * Mathf.PI) * stepHeight + Mathf.Lerp(startPos.y, targetPos.y, stepTime);
+            
+            leftFootPos = new Vector3(x, y, z);
+            
             yield return null;
         }
-        timer = 0f;
-        LStepping = false;
+        
+        // Ensure we reach exactly the target
+        leftFootPos = targetPos;
+        stepTime = 0f;
+        isLeftStepping = false;
     }
-
+    
     // Right foot stepping coroutine
-    IEnumerator stepR()
+    private IEnumerator StepRight()
     {
-        RStepping = true;
-        float extraSpeeder = Mathf.Clamp(Vector3.Distance(ShouldBeR, ShouldReallyBeR) / 0.3f, 1f, 1.5f);
-        Vector3 currentShouldReallyBeR = this.ShouldReallyBeR;
-        while (timer < 1f)
+        isRightStepping = true;
+        
+        // Calculate step speed based on distance
+        float speedMultiplier = Mathf.Clamp(rightDistance / stepThreshold, 1f, 1.5f);
+        
+        // Store positions
+        Vector3 startPos = rightFootPos;
+        Vector3 targetPos = rightFootTarget2D;
+        
+        // Step animation
+        stepTime = 0f;
+        while (stepTime < 1f)
         {
-            timer += Time.deltaTime * legSpeed * extraSpeeder;
-
-            ShouldBeR = CalculatePositionRight(currentShouldReallyBeR);
-
+            stepTime += Time.deltaTime * stepSpeed * speedMultiplier;
+            
+            // Calculate position with arc
+            float x = Mathf.Lerp(startPos.x, targetPos.x, stepTime);
+            float z = Mathf.Lerp(startPos.z, targetPos.z, stepTime);
+            float y = Mathf.Sin(stepTime * Mathf.PI) * stepHeight + Mathf.Lerp(startPos.y, targetPos.y, stepTime);
+            
+            rightFootPos = new Vector3(x, y, z);
+            
             yield return null;
         }
-        timer = 0f;
-        RStepping = false;
-    }
-    Vector3 CalculatePositionLeft(Vector3 ShouldReallyBeL)
-    {
-        float x = leftTarget.position.x * (1f - timer) + ShouldReallyBeL.x * timer;
-        float y = Mathf.Sin(timer * 180f * Mathf.Deg2Rad) * LegStepUp + ShouldReallyBeL.y;
-        float z = leftTarget.position.z * (1f - timer) + ShouldReallyBeL.z * timer;
-        return new Vector3(x, y, z);
-    }
-
-    Vector3 CalculatePositionRight(Vector3 ShouldReallyBeR)
-    {
-        float x = rightTarget.position.x * (1f - timer) + ShouldReallyBeR.x * timer;
-        float y = Mathf.Sin(timer * 180f * Mathf.Deg2Rad) * LegStepUp + ShouldReallyBeR.y;
-        float z = rightTarget.position.z * (1f - timer) + ShouldReallyBeR.z * timer;
-        return new Vector3(x, y, z);
+        
+        // Ensure we reach exactly the target
+        rightFootPos = targetPos;
+        stepTime = 0f;
+        isRightStepping = false;
     }
 }

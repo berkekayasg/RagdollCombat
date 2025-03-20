@@ -4,101 +4,120 @@ public class RagdollBalance : MonoBehaviour
 {
     [Header("Rigidbody References")]
     public Rigidbody head;
-    public Rigidbody rightFoot;
-    public Rigidbody leftFoot;
     public Rigidbody centerMass;
-    public Rigidbody leftArm; // For counter-balancing
-    public Rigidbody rightArm; // For counter-balancing
-
+    public Rigidbody leftFoot;
+    public Rigidbody rightFoot;
+    public Rigidbody leftArm;
+    public Rigidbody rightArm;
+    
     [Header("Force Settings")]
     public float headUpForce = 1f;
     public float upForce = 10f;
     public float downForce = 5f;
-    public float armCounterBalanceForce = 5f; // Force applied to arms for balancing
-
+    public float armCounterForce = 5f;
+    
     [Header("Status")]
     public bool isBalanceActive = false;
-
+    
     private RagdollManager ragdollManager;
 
 
-    private void Start()
+    void OnEnable()
+    {
+        GetComponent<RagdollManager>().OnFall += () => isBalanceActive = false;
+    }
+
+    void OnDisable()
+    {
+        GetComponent<RagdollManager>().OnFall -= () => isBalanceActive = false;
+    }
+
+    void Start()
     {
         ragdollManager = GetComponent<RagdollManager>();
-
-        if (ragdollManager == null)
-            Debug.LogWarning("RagdollBalance: RagdollManager component not found!");
     }
-
+    
     void FixedUpdate()
     {
-        if (isBalanceActive)
-        {
-            // Apply basic forces
-            ApplyBasicForces();
-
-            // Apply arm counter-balance if arms are assigned
-            ApplyArmCounterBalance();
-        }
+        if (!isBalanceActive) return;
+        
+        // Only apply forces if we have the necessary components
+        if (centerMass == null) return;
+        
+        // Get consciousness level
+        float conscious = ragdollManager != null ? ragdollManager.consciousness : 1f;
+        
+        // Apply ground forces to feet
+        ApplyFootForces();
+        
+        // Apply upright forces to body
+        ApplyUprightForces(conscious);
+        
+        // Apply counter-balance with arms
+        ApplyArmCounterBalance();
     }
-
-    // Apply basic forces to keep the character upright
-    private void ApplyBasicForces()
+    
+    void ApplyFootForces()
     {
-        // Apply downward force to feet to keep them grounded
-        rightFoot.AddForce(Vector3.down * downForce);
-        leftFoot.AddForce(Vector3.down * downForce);
-
-        // Apply upward force to center of mass, scaled by how upright the character is
-        float consciousnessMultiplier = ragdollManager != null ? ragdollManager.consciousness : 1f;
-        float uprightFactor = Mathf.Clamp(Vector3.Dot(Vector3.up, centerMass.transform.up), 0f, 1f);
-
-        centerMass.AddForce(centerMass.transform.up * upForce * uprightFactor * consciousnessMultiplier);
-
-        // Apply gentle upward force to head to help keep it upright
-        head.AddForce(Vector3.up * headUpForce * consciousnessMultiplier);
-
-        // Reduce linear velocity of center of mass based on consciousness
-        centerMass.linearVelocity *= Mathf.Clamp01((1.7f - consciousnessMultiplier));
+        if (leftFoot != null)
+            leftFoot.AddForce(Vector3.down * downForce);
+            
+        if (rightFoot != null)
+            rightFoot.AddForce(Vector3.down * downForce);
     }
-
-
-    // Use arms for counter-balance when leaning
-    private void ApplyArmCounterBalance()
+    
+    void ApplyUprightForces(float conscious)
     {
-        if (leftArm == null || rightArm == null)
-            return;
-
-        // Get side-to-side lean amount
-        Vector3 rightVector = centerMass.transform.right;
-        float sideLeaning = Vector3.Dot(rightVector, Vector3.up);
-
-        // Apply counter forces to arms based on lean direction
-        if (sideLeaning > 0.1f)
+        // Calculate how upright the character is (0-1)
+        float uprightFactor = Mathf.Clamp01(Vector3.Dot(Vector3.up, centerMass.transform.up));
+        
+        // Apply scaled force to stay upright
+        centerMass.AddForce(centerMass.transform.up * upForce * uprightFactor * conscious);
+        
+        // Apply head force
+        if (head != null)
+            head.AddForce(Vector3.up * headUpForce * conscious);
+        
+        // Dampen velocity when unconscious
+        if (conscious < 1f)
+            centerMass.linearVelocity *= Mathf.Clamp01(1.7f - conscious);
+    }
+    
+    void ApplyArmCounterBalance()
+    {
+        if (leftArm == null || rightArm == null) return;
+        
+        // Get side-to-side lean
+        float sideLean = Vector3.Dot(centerMass.transform.right, Vector3.up);
+        
+        // Counter side lean
+        if (Mathf.Abs(sideLean) > 0.1f)
         {
-            // Leaning right, counter with left arm
-            leftArm.AddForce(Vector3.up * armCounterBalanceForce * sideLeaning);
-            // Optionally add some inward force to keep arms from flailing
-            leftArm.AddForce(-rightVector * armCounterBalanceForce * 0.5f * sideLeaning);
+            if (sideLean > 0)
+            {
+                // Leaning right, counter with left arm
+                leftArm.AddForce(Vector3.up * armCounterForce * sideLean);
+                leftArm.AddForce(-centerMass.transform.right * armCounterForce * 0.5f * sideLean);
+            }
+            else
+            {
+                // Leaning left, counter with right arm
+                rightArm.AddForce(Vector3.up * armCounterForce * -sideLean);
+                rightArm.AddForce(centerMass.transform.right * armCounterForce * 0.5f * -sideLean);
+            }
         }
-        else if (sideLeaning < -0.1f)
-        {
-            // Leaning left, counter with right arm
-            rightArm.AddForce(Vector3.up * armCounterBalanceForce * -sideLeaning);
-            // Optionally add some inward force to keep arms from flailing
-            rightArm.AddForce(rightVector * armCounterBalanceForce * 0.5f * -sideLeaning);
-        }
-
+        
         // Get forward/backward lean
-        Vector3 forwardVector = centerMass.transform.forward;
-        float forwardLeaning = Vector3.Dot(forwardVector, Vector3.up);
-
-        // Counter forward/backward leaning with both arms
-        if (Mathf.Abs(forwardLeaning) > 0.1f)
+        float forwardLean = Vector3.Dot(centerMass.transform.forward, Vector3.up);
+        
+        // Counter forward/backward lean
+        if (Mathf.Abs(forwardLean) > 0.1f)
         {
-            Vector3 counterDirection = -forwardVector * Mathf.Sign(forwardLeaning);
-            leftArm.AddForce(counterDirection * armCounterBalanceForce * Mathf.Abs(forwardLeaning));
-            rightArm.AddForce(counterDirection * armCounterBalanceForce * Mathf.Abs(forwardLeaning));
+            Vector3 counterDir = -centerMass.transform.forward * Mathf.Sign(forwardLean);
+            float leanAmount = Mathf.Abs(forwardLean);
+            
+            leftArm.AddForce(counterDir * armCounterForce * leanAmount);
+            rightArm.AddForce(counterDir * armCounterForce * leanAmount);
         }
     }
 }

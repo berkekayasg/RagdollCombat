@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveForce: 50
   turnTorque: 4
-  jumpForce: 15
+  jumpForce: 460.2
   punchForce: 20
   attackCooldown: 0.5
   targetingRange: 10

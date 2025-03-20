@@ -1,59 +1,66 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class RagdollManager : MonoBehaviour
 {
-    Rigidbody[] bodyParts;
+    [Header("Character State")]
+    [Range(0f, 1f)]
     public float consciousness = 1f;
-    public float generalForce = 10f;
-    public float fallAngle = 0.68f;
-    public float limitRbSpeed = 10f;
-
-    // Balance parameters
     public bool isActive = false;
+    
+    [Range(0f, 1f)]
+    public float fallAngle = 0.68f;
+    
+    // Events
+    public System.Action OnFall;
+    public System.Action OnHit;
+    
+    // Private references
+    private Rigidbody[] bodyParts;
     private Transform hips;
 
     private void Start()
     {
+        // Find references
         hips = transform.Find("Hips");
         bodyParts = GetComponentsInChildren<Rigidbody>();
     }
-
+    
     private void FixedUpdate()
     {
-        if (isActive)
+        if (isActive && hips != null)
         {
-            // Check if character has fallen over
-            if (Mathf.Clamp(Vector3.Dot(Vector3.up, hips.up), 0f, 1f) < fallAngle)
+            // Check if fallen over
+            float upAlignment = Vector3.Dot(Vector3.up, hips.up);
+            if (upAlignment < fallAngle)
             {
-                GetComponent<LegControll>().isLegControllActive = false;
-                GetComponent<RagdollBalance>().isBalanceActive = false;
-                isActive = false;
-                // Character has fallen
+                Fall();
             }
         }
     }
-
+    
     // Apply a hit force to the character
-    public void ApplyHit(Vector3 hitDirection, float power)
+    public void ApplyHit(Vector3 hitPosition, float power)
     {
-        Vector3 hitPosition = hips.position - (hitDirection * 0.25f) + new Vector3(0, 0.25f, 0);
+        if (hips == null || bodyParts == null) return;
         
-        // Apply explosion force to upper body parts
-        for (int i = 0; i < bodyParts.Length; i++)
+        
+        // Apply explosion force to body parts
+        foreach (var rb in bodyParts)
         {
-            bodyParts[i].AddExplosionForce(power, hitPosition, 0.33f);
+            rb.AddExplosionForce(power, hitPosition.normalized, 0.33f, 0f, ForceMode.Impulse);
         }
-
-        consciousness -= power / 1000f;
+        
+        // Reduce consciousness
+        consciousness = Mathf.Clamp01(consciousness - (power / 1000f));
+        
+        // Notify listeners
+        OnHit?.Invoke();
     }
-
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            consciousness -= 0.1f;
-        }
+    
+    // Called when character falls
+    private void Fall()
+    {            
+        OnFall?.Invoke();
+        isActive = false;
     }
 }

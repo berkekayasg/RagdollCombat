@@ -69,14 +69,6 @@ public class RaycastShooter : MonoBehaviour
                 {
                     ragdoll.ApplyHit(mouseRay.direction, impactForce);
                 }
-
-                // Optional: Check for HitReceiver to apply damage
-                HitReceiver hitReceiver = hit.collider.GetComponent<HitReceiver>();
-                if (hitReceiver != null)
-                {
-                    hitReceiver.ReceiveHit(mouseRay.direction, impactForce * 0.5f, impactForce);
-                }
-
                 Debug.Log($"Hit {hit.collider.name} with force {impactForce}");
             }
         }
@@ -117,15 +109,7 @@ public class RaycastShooter : MonoBehaviour
                 if (ragdoll != null)
                 {
                     ragdoll.ApplyHit(rayOrigin.forward, impactForce);
-                }
-                
-                // Optional: Check for HitReceiver to apply damage
-                HitReceiver hitReceiver = hit.collider.GetComponent<HitReceiver>();
-                if (hitReceiver != null)
-                {
-                    hitReceiver.ReceiveHit(rayOrigin.forward, impactForce * 0.5f, impactForce);
-                }
-                
+                }                
                 Debug.Log($"Hit {hit.collider.name} with force {impactForce}");
             }
         }
@@ -172,11 +156,6 @@ public class RaycastShooter : MonoBehaviour
                     ragdoll.ApplyHit(direction, impactForce);
                 }
                 
-                HitReceiver hitReceiver = hit.collider.GetComponent<HitReceiver>();
-                if (hitReceiver != null)
-                {
-                    hitReceiver.ReceiveHit(direction, impactForce * 0.5f, impactForce);
-                }
             }
         }
     }

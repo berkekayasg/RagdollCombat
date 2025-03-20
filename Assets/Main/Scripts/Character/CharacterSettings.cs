@@ -17,4 +17,8 @@ public class CharacterSettings : ScriptableObject
     public float targetingRange = 10f;
     public float optimalDistance = 2f;
     public float attackProbability = 0.3f;
+
+    [Header("Combat Settings")]
+    public float impactThreshold = 3f;
+    public float damageMultiplier = 1f;
 }
