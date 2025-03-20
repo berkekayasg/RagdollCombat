@@ -48,4 +48,12 @@ public class RagdollManager : MonoBehaviour
 
         consciousness -= power / 1000f;
     }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            consciousness -= 0.1f;
+        }
+    }
 }

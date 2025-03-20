@@ -4,18 +4,10 @@ public class RagdollInput : MonoBehaviour
 {
     public RagdollManager ragdollManager;
     public Transform hips;
-    public float moveForce = 10f;
-    public float turnTorque = 5f;
-    public float jumpForce = 15f;
-    public float punchForce = 20f;
-    public float kickForce = 30f;
+    public CharacterSettings settings;
     
     public Transform leftFist;
     public Transform rightFist;
-    public Transform leftFoot;
-    public Transform rightFoot;
-    
-    public float attackCooldown = 0.5f;
     
     private float lastAttackTime;
     private Rigidbody hipsRb;
@@ -37,26 +29,18 @@ public class RagdollInput : MonoBehaviour
             return;
             
         // Attack inputs
-        if (Input.GetKeyDown(KeyCode.J) && Time.time > lastAttackTime + attackCooldown)
+        if (Input.GetKeyDown(KeyCode.J) && Time.time > lastAttackTime + settings.attackCooldown)
         {
             LeftPunch();
             lastAttackTime = Time.time;
         }
-        else if (Input.GetKeyDown(KeyCode.K) && Time.time > lastAttackTime + attackCooldown)
+        else if (Input.GetKeyDown(KeyCode.K) && Time.time > lastAttackTime + settings.attackCooldown)
         {
             RightPunch();
             lastAttackTime = Time.time;
         }
-        else if (Input.GetKeyDown(KeyCode.N) && Time.time > lastAttackTime + attackCooldown)
-        {
-            LeftKick();
-            lastAttackTime = Time.time;
-        }
-        else if (Input.GetKeyDown(KeyCode.M) && Time.time > lastAttackTime + attackCooldown)
-        {
-            RightKick();
-            lastAttackTime = Time.time;
-        }
+        // Kicks disabled due to IK system issues
+        // Kick inputs (N, M) no longer respond
     }
     
     void FixedUpdate()
@@ -71,19 +55,19 @@ public class RagdollInput : MonoBehaviour
         // Apply movement forces
         if (vertical != 0)
         {
-            hipsRb.AddForce(hips.forward * vertical * moveForce);
+            hipsRb.AddForce(hips.forward * vertical * settings.moveForce);
         }
         
         // Apply turning torque
         if (horizontal != 0)
         {
-            hipsRb.AddTorque(Vector3.up * horizontal * turnTorque);
+            hipsRb.AddTorque(Vector3.up * horizontal * settings.turnTorque);
         }
         
         // Jump
         if (Input.GetButton("Jump"))
         {
-            hipsRb.AddForce(Vector3.up * jumpForce);
+            hipsRb.AddForce(Vector3.up * settings.jumpForce);
         }
     }
     
@@ -91,7 +75,7 @@ public class RagdollInput : MonoBehaviour
     {
         if (leftFist != null && leftFist.GetComponent<Rigidbody>() != null)
         {
-            leftFist.GetComponent<Rigidbody>().AddForce(hips.forward * punchForce, ForceMode.Impulse);
+            leftFist.GetComponent<Rigidbody>().AddForce(hips.forward * settings.punchForce, ForceMode.Impulse);
         }
     }
     
@@ -99,23 +83,9 @@ public class RagdollInput : MonoBehaviour
     {
         if (rightFist != null && rightFist.GetComponent<Rigidbody>() != null)
         {
-            rightFist.GetComponent<Rigidbody>().AddForce(hips.forward * punchForce, ForceMode.Impulse);
+            rightFist.GetComponent<Rigidbody>().AddForce(hips.forward * settings.punchForce, ForceMode.Impulse);
         }
     }
     
-    void LeftKick()
-    {
-        if (leftFoot != null && leftFoot.GetComponent<Rigidbody>() != null)
-        {
-            leftFoot.GetComponent<Rigidbody>().AddForce(hips.forward * kickForce, ForceMode.Impulse);
-        }
-    }
-    
-    void RightKick()
-    {
-        if (rightFoot != null && rightFoot.GetComponent<Rigidbody>() != null)
-        {
-            rightFoot.GetComponent<Rigidbody>().AddForce(hips.forward * kickForce, ForceMode.Impulse);
-        }
-    }
+    // Kick attacks removed as they don't work well with IK system
 }
